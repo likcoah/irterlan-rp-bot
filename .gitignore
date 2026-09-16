@@ -5,6 +5,7 @@
 
 !Dockerfile
 !docker-compose.yaml
+!.env.example
 
 !go.mod
 !go.sum
@@ -18,3 +19,5 @@
 
 !cmd/*
 !cmd/**
+!internal/*
+!internal/**
