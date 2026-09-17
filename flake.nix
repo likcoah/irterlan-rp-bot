@@ -7,7 +7,13 @@
 	outputs = { self, nixpkgs, ... }:
 		let
 			system = "x86_64-linux";
-			pkgs = nixpkgs.legacyPackages.${system};
+			myOverlays = final: prev: {
+				go = prev.go_1_27;
+			};
+			pkgs = import nixpkgs {
+				inherit system;
+				overlays = [ myOverlays ];
+			};
 		in
 		{
 			devShells.${system}.default = pkgs.mkShell {

@@ -1,0 +1,7 @@
+services:
+  bot:
+    build: .
+    container_name: irterlan_rp_bot
+    restart: unless-stopped
+    env_file:
+      - .env

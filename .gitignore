@@ -4,6 +4,7 @@
 !README.md
 
 !Dockerfile
+!.dockerignore
 !docker-compose.yaml
 !.env.example
 
