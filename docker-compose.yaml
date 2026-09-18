@@ -5,3 +5,14 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    expose:
+      - ${PORT}
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    env_file:
+      - .env
+    depends_on:
+      - bot
