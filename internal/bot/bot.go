@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"github.com/likcoah/irterlan-rp-bot/internal/rng"
 )
 
 
@@ -18,10 +23,14 @@ type Bot struct {
 	webhookURL		string
 	webhookSecret	string
 	port			string
+	rd				*rng.Randomizer
 }
 
 
-func New(token, webhookURL, webhookSecret, port string) (*Bot, error) {
+var rollRe = regexp.MustCompile(`^/(\d*)[dдк](\d+)$`)
+
+
+func New(token, webhookURL, webhookSecret, port string, rd *rng.Randomizer) (*Bot, error) {
 	opts := []bot.Option{
 		bot.WithWebhookSecretToken(webhookSecret),
 	}
@@ -29,14 +38,17 @@ func New(token, webhookURL, webhookSecret, port string) (*Bot, error) {
 	b, err := bot.New(token, opts...)
 	if err != nil { return nil, err }
 
-	b.RegisterHandler(bot.HandlerTypeMessageText, "/ping", bot.MatchTypeExact, ping)
-
-	return &Bot{
+	bc := &Bot{
 		client:			b,
 		webhookURL:		webhookURL,
 		webhookSecret:	webhookSecret,
 		port:			port,
-	}, nil
+		rd:				rd,
+	}
+
+	b.RegisterHandlerRegexp(bot.HandlerTypeMessageText, rollRe, bc.roll)
+
+	return bc, nil
 }
 
 func (b *Bot) Start(ctx context.Context) error {
@@ -73,10 +85,42 @@ func (b *Bot) Start(ctx context.Context) error {
 	return nil
 }
 
-func ping(ctx context.Context, b *bot.Bot, update *models.Update) {
+func (bc *Bot) roll(ctx context.Context, b *bot.Bot, update *models.Update) {
+	matches := rollRe.FindStringSubmatch(update.Message.Text)
+
+	N, _ := strconv.Atoi(matches[2])
+	if 2 > N || N > 100 {
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text: "Sorry, but the number of sides must be between 2 and 100\n\n" +
+				"Сорян, но количество сторон куба должно быть в диапазоне от 2 до 100",
+		})
+		return
+	}
+	dicesCount := 1
+	if matches[1] != "" {
+		dicesCount, _ = strconv.Atoi(matches[1])
+		if dicesCount < 1 || 100 < dicesCount { dicesCount = 1 }
+	}
+	result, history := 0, make([]string, dicesCount)
+
+	for i := range dicesCount {
+		n := bc.rd.Roll(update.Message.From.ID, N)
+		result += n
+		history[i] = strconv.Itoa(n)
+	}
+
+	var text string
+	if dicesCount == 1 {
+		text = strconv.Itoa(result)
+	} else {
+		text = fmt.Sprintf("%s = <b>%d</b>", strings.Join(history, " + "), result)
+	}
+
 	b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: update.Message.Chat.ID,
-		Text: "pong",
+		Text: text,
+		ParseMode: models.ParseModeHTML,
 	})
 }
 

@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/likcoah/irterlan-rp-bot/internal/bot"
+	"github.com/likcoah/irterlan-rp-bot/internal/rng"
 )
 
 func main() {
@@ -18,8 +19,10 @@ func main() {
 	)
 	defer cancel()
 
+	rd := rng.New()
+
 	c, err := bot.New(os.Getenv("BOT_TOKEN"), os.Getenv("BOT_WEBHOOK_URL"),
-		os.Getenv("BOT_WEBHOOK_SECRET"), os.Getenv("PORT"))
+		os.Getenv("BOT_WEBHOOK_SECRET"), os.Getenv("PORT"), rd)
 	if err != nil {
 		slog.Error("bot initialization failed, check env tokens", "err", err)
 		return
