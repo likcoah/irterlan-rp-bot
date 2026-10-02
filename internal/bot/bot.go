@@ -33,22 +33,24 @@ var rollRe = regexp.MustCompile(`^/(\d*)[dдк](\d+)$`)
 func New(token, webhookURL, webhookSecret, port string, rd *rng.Randomizer) (*Bot, error) {
 	opts := []bot.Option{
 		bot.WithWebhookSecretToken(webhookSecret),
+		bot.WithDefaultHandler(func(_ context.Context, _ *bot.Bot, _ *models.Update) {}),
 	}
 
-	b, err := bot.New(token, opts...)
+	tg, err := bot.New(token, opts...)
 	if err != nil { return nil, err }
 
-	bc := &Bot{
-		client:			b,
+	b := &Bot{
+		client:			tg,
 		webhookURL:		webhookURL,
 		webhookSecret:	webhookSecret,
 		port:			port,
 		rd:				rd,
 	}
 
-	b.RegisterHandlerRegexp(bot.HandlerTypeMessageText, rollRe, bc.roll)
+	tg.RegisterHandler(bot.HandlerTypeMessageText, "start", bot.MatchTypeCommandStartOnly, b.startHandler)
+	tg.RegisterHandlerRegexp(bot.HandlerTypeMessageText, rollRe, b.rollHandler)
 
-	return bc, nil
+	return b, nil
 }
 
 func (b *Bot) Start(ctx context.Context) error {
@@ -85,16 +87,35 @@ func (b *Bot) Start(ctx context.Context) error {
 	return nil
 }
 
-func (bc *Bot) roll(ctx context.Context, b *bot.Bot, update *models.Update) {
+func (b *Bot) startHandler(ctx context.Context, tg *bot.Bot, update *models.Update) {
+	_, err := tg.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: update.Message.Chat.ID,
+		MessageThreadID: update.Message.MessageThreadID,
+		Text: "<i>Dice bot created by <a href='https://t.me/likcoah'>likcoah</a> for <a href='https://t.me/UltracruelRP'>Irterlan RP</a></i>\n\n" +
+			"You can roll dice using the <code>/[number of dice rolls][d|д|к][number of sides on a die]</code> command\n\n" +
+			"Examples:\n" +
+			"<code>/d20</code> -> roll a 20-sided die\n" +
+			"<code>/4к6</code> -> roll four 6-sided dice",
+		ParseMode: models.ParseModeHTML,
+		LinkPreviewOptions: &models.LinkPreviewOptions{
+        	IsDisabled: bot.True(),
+    	},
+	})
+	if err != nil { slog.Error("send message failed", "err", err) }
+}
+
+func (b *Bot) rollHandler(ctx context.Context, tg *bot.Bot, update *models.Update) {
 	matches := rollRe.FindStringSubmatch(update.Message.Text)
 
 	N, _ := strconv.Atoi(matches[2])
 	if 2 > N || N > 100 {
-		b.SendMessage(ctx, &bot.SendMessageParams{
+		_, err := tg.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: update.Message.Chat.ID,
+			MessageThreadID: update.Message.MessageThreadID,
 			Text: "Sorry, but the number of sides must be between 2 and 100\n\n" +
 				"Сорян, но количество сторон куба должно быть в диапазоне от 2 до 100",
 		})
+		if err != nil { slog.Error("send message failed", "err", err) }
 		return
 	}
 	dicesCount := 1
@@ -105,7 +126,7 @@ func (bc *Bot) roll(ctx context.Context, b *bot.Bot, update *models.Update) {
 	result, history := 0, make([]string, dicesCount)
 
 	for i := range dicesCount {
-		n := bc.rd.Roll(update.Message.From.ID, N)
+		n := b.rd.Roll(update.Message.From.ID, N)
 		result += n
 		history[i] = strconv.Itoa(n)
 	}
@@ -117,10 +138,12 @@ func (bc *Bot) roll(ctx context.Context, b *bot.Bot, update *models.Update) {
 		text = fmt.Sprintf("%s = <b>%d</b>", strings.Join(history, " + "), result)
 	}
 
-	b.SendMessage(ctx, &bot.SendMessageParams{
+	_, err := tg.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: update.Message.Chat.ID,
+		MessageThreadID: update.Message.MessageThreadID,
 		Text: text,
 		ParseMode: models.ParseModeHTML,
 	})
+	if err != nil { slog.Error("send message failed", "err", err) }
 }
 
